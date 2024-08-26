@@ -1,8 +1,7 @@
 from flask import Flask, request, jsonify
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime, timedelta
-import calendar
+from datetime import datetime
 import json
 
 app = Flask(__name__)
@@ -28,10 +27,9 @@ def parse_events(soup):
     events = soup.find_all('section', class_='DiscoverHorizontalEventCard-module__cardWrapper___2_FKN')
     
     if not events:
+        print("No events found on the page.")
         return []
 
-    current_week_start = datetime.now() - timedelta(days=datetime.now().weekday())
-    current_week_end = current_week_start + timedelta(days=6)
     event_list = []
 
     for event in events:
@@ -41,19 +39,7 @@ def parse_events(soup):
         date_element = event.find('p', class_='Typography_root__487rx #585163 Typography_body-md__487rx event-card__clamp-line--one Typography_align-match-parent__487rx')
         date_text = date_element.get_text(strip=True) if date_element else 'No date found'
 
-        event_date = None
-        for fmt in ('%A at %I:%M %p', '%a, %b %d, %I:%M %p'):
-            try:
-                event_date = datetime.strptime(date_text, fmt)
-                day_index = list(calendar.day_name).index(event_date.strftime('%A'))
-                event_date = current_week_start + timedelta(days=day_index)
-                event_date = event_date.replace(hour=event_date.hour, minute=event_date.minute)
-                break
-            except ValueError:
-                continue
-        
-        if not event_date or not (current_week_start <= event_date <= current_week_end):
-            continue
+        print(f"Found event: {title} - Date text: {date_text}")
 
         link_element = event.find('a', class_='event-card-link')
         link = link_element['href'] if link_element else 'No link found'
@@ -61,9 +47,10 @@ def parse_events(soup):
         image_element = event.find('img', class_='event-card-image')
         image_url = image_element['src'] if image_element else 'No image found'
 
+        # Ajouter l'événement à la liste sans filtrage
         event_list.append({
             'title': title,
-            'date': event_date.strftime('%A, %B %d, %Y at %I:%M %p'),
+            'date': date_text,  # On garde simplement le texte de la date tel quel
             'link': link,
             'image_url': image_url
         })
@@ -79,6 +66,8 @@ def scrape_all_pages(base_url):
         if response and response.status_code == 200:
             soup = BeautifulSoup(response.content, 'html.parser')
             events = parse_events(soup)
+            if not events:
+                break
             all_events.extend(events)
             
             next_button = soup.find('a', {'aria-label': 'Next'})
@@ -95,10 +84,10 @@ def get_events():
     city = request.args.get('city', 'paris')
     category = request.args.get('category', 'music')
 
-    base_url = f'https://www.eventbrite.fr/d/{country}--{city}/{category}--events/'
+    base_url = f'https://www.eventbrite.fr/d/{country}--{city}/{category}--events--this-weekend/'
+   
     events = scrape_all_pages(base_url)
     
-    # Utilisation de json.dumps avec ensure_ascii=False pour éviter le ré-encodage
     return app.response_class(
         response=json.dumps(events, ensure_ascii=False),
         mimetype='application/json'
