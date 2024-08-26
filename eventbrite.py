@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime
 import json
 
 app = Flask(__name__)
@@ -47,7 +46,7 @@ def parse_events(soup):
         image_element = event.find('img', class_='event-card-image')
         image_url = image_element['src'] if image_element else 'No image found'
 
-        # Ajouter l'événement à la liste sans filtrage
+        # Ajouter l'événement à la liste sans traitement de la date
         event_list.append({
             'title': title,
             'date': date_text,  # On garde simplement le texte de la date tel quel
