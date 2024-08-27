@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import requests
 from bs4 import BeautifulSoup
+from datetime import datetime, timedelta
 import json
 
 app = Flask(__name__)
@@ -26,7 +27,6 @@ def parse_events(soup):
     events = soup.find_all('section', class_='DiscoverHorizontalEventCard-module__cardWrapper___2_FKN')
     
     if not events:
-        print("No events found on the page.")
         return []
 
     event_list = []
@@ -38,44 +38,20 @@ def parse_events(soup):
         date_element = event.find('p', class_='Typography_root__487rx #585163 Typography_body-md__487rx event-card__clamp-line--one Typography_align-match-parent__487rx')
         date_text = date_element.get_text(strip=True) if date_element else 'No date found'
 
-        print(f"Found event: {title} - Date text: {date_text}")
-
         link_element = event.find('a', class_='event-card-link')
         link = link_element['href'] if link_element else 'No link found'
 
         image_element = event.find('img', class_='event-card-image')
         image_url = image_element['src'] if image_element else 'No image found'
 
-        # Ajouter l'événement à la liste sans traitement de la date
         event_list.append({
             'title': title,
-            'date': date_text,  # On garde simplement le texte de la date tel quel
+            'date': date_text,  # Laisse la date telle qu'elle est extraite
             'link': link,
             'image_url': image_url
         })
     
     return event_list
-
-def scrape_all_pages(base_url):
-    page = 1
-    all_events = []
-    while True:
-        url = f'{base_url}?page={page}'
-        response = fetch_page(url)
-        if response and response.status_code == 200:
-            soup = BeautifulSoup(response.content, 'html.parser')
-            events = parse_events(soup)
-            if not events:
-                break
-            all_events.extend(events)
-            
-            next_button = soup.find('a', {'aria-label': 'Next'})
-            if not next_button or 'disabled' in next_button.get('class', []):
-                break
-            page += 1
-        else:
-            break
-    return all_events
 
 @app.route('/events', methods=['GET'])
 def get_events():
@@ -83,14 +59,26 @@ def get_events():
     city = request.args.get('city', 'paris')
     category = request.args.get('category', 'music')
 
-    base_url = f'https://www.eventbrite.fr/d/{country}--{city}/{category}--events--this-weekend/'
+    # Calcul du début et de la fin de la semaine
+    today = datetime.now()
+    start_of_week = today - timedelta(days=today.weekday())  # Lundi
+    end_of_week = start_of_week + timedelta(days=6)  # Dimanche
+
+    # Convertir les dates en format ISO pour les URL
+    start_date = start_of_week.strftime('%Y-%m-%d')
+    end_date = end_of_week.strftime('%Y-%m-%d')
+
+    # Construire l'URL avec les paramètres de date
+    base_url = f'https://www.eventbrite.fr/d/{country}--{city}/{category}/?start_date={start_date}&end_date={end_date}'
    
-    events = scrape_all_pages(base_url)
-    
-    return app.response_class(
-        response=json.dumps(events, ensure_ascii=False),
-        mimetype='application/json'
-    )
+    response = fetch_page(base_url)
+    if response:
+        soup = BeautifulSoup(response.content, 'html.parser')
+        events = parse_events(soup)
+    else:
+        events = []
+
+    return jsonify(events)
 
 if __name__ == '__main__':
     app.run(debug=True)
