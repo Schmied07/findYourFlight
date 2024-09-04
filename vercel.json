@@ -2,14 +2,14 @@
     "version": 2,
     "builds": [
       {
-        "src": "eventbrite.py",
+        "src": "findYourFlight.py",
         "use": "@vercel/python"
       }
     ],
     "routes": [
       {
         "src": "/(.*)",
-        "dest": "eventbrite.py"
+        "dest": "findYourFlight.py"
       }
     ]
   }
